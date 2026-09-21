@@ -1,0 +1,19 @@
+# الباك اند وحده على المنفذ 5000.
+# الإعدادات من ملف .env.docker بجانب هذا الملف (انسخ .env.docker.example إليه واملأه).
+# MariaDB وخادم وفير خارج الحاوية؛ إن كانا على نفس الجهاز فعنوانهما host.docker.internal.
+#   التشغيل:  docker compose up -d --build
+#   السجلات:  docker compose logs -f
+services:
+  server:
+    build: .
+    image: wafeer-dashboard-server
+    container_name: wafeer-dashboard-server
+    restart: unless-stopped
+    env_file: .env.docker
+    environment:
+      NODE_ENV: production
+      PORT: "5000"
+    ports:
+      - "5000:5000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
