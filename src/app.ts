@@ -12,7 +12,7 @@ export function createApp(deps: RouteDeps, options: { corsOrigins: string[]; log
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
   app.use(helmet());
-  app.use(cors({ origin: options.corsOrigins }));
+  app.use(cors({ origin: true, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
   app.use(rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false }));
   app.use('/api', createRoutes(deps));
