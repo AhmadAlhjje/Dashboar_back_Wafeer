@@ -1,19 +1,53 @@
-# الباك اند وحده على المنفذ 5000.
-# الإعدادات من ملف .env.docker بجانب هذا الملف (انسخ .env.docker.example إليه واملأه).
-# MariaDB وخادم وفير خارج الحاوية؛ إن كانا على نفس الجهاز فعنوانهما host.docker.internal.
-#   التشغيل:  docker compose up -d --build
-#   السجلات:  docker compose logs -f
+# الباك اند (المنفذ 5000) + قاعدة بيانات MariaDB تُنشأ تلقائياً عند أول تشغيل.
+# الإعدادات من ملف .env بجانب هذا الملف (انسخ .env.example إلى .env واملأه) — يقرأه compose
+# للتعويض (${...}) ويُمرَّر كاملاً إلى حاوية الباك اند.
+#   التشغيل/التحديث:  docker compose up -d --build
+#   السجلات:          docker compose logs -f
+#   الإيقاف:          docker compose down        (البيانات تبقى في المجلد db_data)
+#   حذف كل شيء:       docker compose down -v     (يمسح قاعدة البيانات!)
 services:
+  db:
+    image: mariadb:11
+    container_name: wafeer-dashboard-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?ضع DB_ROOT_PASSWORD في .env}
+      MARIADB_DATABASE: ${DB_NAME:-mizan}
+      MARIADB_USER: ${DB_USER:-wafeer}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?ضع DB_PASSWORD في .env}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - db_data:/var/lib/mysql
+    # منفذ القاعدة على المضيف (127.0.0.1 فقط) ليستعملها خادم وفير أو أدوات الإدارة. غيّره من .env إن كان 3306 مشغولاً.
+    ports:
+      - "127.0.0.1:${DB_PUBLISH_PORT:-3306}:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   server:
     build: .
     image: wafeer-dashboard-server
     container_name: wafeer-dashboard-server
     restart: unless-stopped
-    env_file: .env.docker
+    env_file: .env
     environment:
       NODE_ENV: production
       PORT: "5000"
+      # القاعدة هي حاوية db أعلاه — تغلب ما في .env
+      DB_HOST: db
+      DB_PORT: "3306"
+    depends_on:
+      db:
+        condition: service_healthy
+    # الباك اند على http://163.245.221.210:5000 (الواجهة تصله داخلياً؛ لا حاجة لفتح 5000 في الجدار الناري)
     ports:
       - "5000:5000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+
+volumes:
+  db_data:
