@@ -59,6 +59,8 @@ const office: Office = {
   phone: null,
   address: null,
   notes: null,
+  logoPath: null,
+  logoUpdatedAt: null,
   createdAt: '2026-09-20T00:00:00.000Z',
   updatedAt: '2026-09-20T00:00:00.000Z',
 };
@@ -77,6 +79,9 @@ async function harness(ownerPassword = 'owner-pass-123') {
     updateOffice: vi.fn().mockResolvedValue(office),
     setLicense: vi.fn().mockResolvedValue({ ...office, status: 'SUSPENDED' }),
     regenerateCode: vi.fn().mockResolvedValue({ ...office, code: 'NEWC2DE9' }),
+    setOfficeLogo: vi.fn().mockResolvedValue({ ...office, logoPath: 'uploads/offices/office-5-a.png', logoUpdatedAt: '2026-09-21T10:00:00.000Z' }),
+    removeOfficeLogo: vi.fn().mockResolvedValue(office),
+    fetchOfficeLogo: vi.fn().mockResolvedValue({ body: new Uint8Array([137, 80, 78, 71]).buffer, contentType: 'image/png' }),
     listAdmins: vi.fn().mockResolvedValue([]),
     createAdmin: vi.fn().mockResolvedValue({ id: '9', fullName: 'أحمد', role: 'ADMIN', isActive: true }),
     resetAdminPassword: vi.fn().mockResolvedValue({ id: '9', fullName: 'أحمد' }),
@@ -171,6 +176,33 @@ describe('offices routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.code).toBe('NEWC2DE9');
     expect(audit.entries.find((e) => e.action === 'office.code_regenerated')?.officeCode).toBe('NEWC2DE9');
+  });
+
+  it('uploads, serves and removes the office logo (any number of times) with audit entries', async () => {
+    const { app, token, platform, audit } = await harness();
+    const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const up1 = await request(app).put('/api/offices/5/logo').set('Authorization', `Bearer ${token}`).attach('logo', png, { filename: 'logo.png', contentType: 'image/png' });
+    expect(up1.status).toBe(200);
+    expect(up1.body.data.logoPath).toBe('uploads/offices/office-5-a.png');
+    const up2 = await request(app).put('/api/offices/5/logo').set('Authorization', `Bearer ${token}`).attach('logo', png, { filename: 'logo2.png', contentType: 'image/png' });
+    expect(up2.status).toBe(200);
+    expect((platform.setOfficeLogo as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    const bad = await request(app).put('/api/offices/5/logo').set('Authorization', `Bearer ${token}`).attach('logo', Buffer.from('x'), { filename: 'x.txt', contentType: 'text/plain' });
+    expect(bad.status).toBe(422);
+    expect(bad.body.error.code).toBe('INVALID_OFFICE_LOGO');
+    const missing = await request(app).put('/api/offices/5/logo').set('Authorization', `Bearer ${token}`);
+    expect(missing.status).toBe(422);
+    (platform.getOffice as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ...office, logoPath: 'uploads/offices/office-5-a.png' });
+    const img = await request(app).get('/api/offices/5/logo').set('Authorization', `Bearer ${token}`);
+    expect(img.status).toBe(200);
+    expect(img.headers['content-type']).toContain('image/png');
+    const none = await request(app).get('/api/offices/5/logo').set('Authorization', `Bearer ${token}`);
+    expect(none.status).toBe(404);
+    const del = await request(app).delete('/api/offices/5/logo').set('Authorization', `Bearer ${token}`);
+    expect(del.status).toBe(200);
+    expect(audit.entries.map((e) => e.action)).toEqual(expect.arrayContaining(['office.logo_updated', 'office.logo_removed']));
+    const anon = await request(app).put('/api/offices/5/logo').attach('logo', png, { filename: 'logo.png', contentType: 'image/png' });
+    expect(anon.status).toBe(401);
   });
 
   it('manages office admins and platform owners', async () => {

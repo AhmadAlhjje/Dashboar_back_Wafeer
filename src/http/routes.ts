@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import type { AuthService } from '../auth/AuthService.js';
@@ -174,6 +175,50 @@ export function createRoutes(deps: RouteDeps): Router {
       const office = await deps.platform.regenerateCode(req.params.id);
       await record(req, 'office.code_regenerated', { officeId: office.id, officeCode: office.code, target: office.name });
       res.json({ success: true, data: office });
+    }),
+  );
+
+  // ── لوغو المكتب: يُبدَّل من اللوحة متى شاء المالك (داخل التطبيق يبقى مرة واحدة) ──
+  const logoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+    fileFilter: (_req, file, done) =>
+      ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype)
+        ? done(null, true)
+        : done(new AppError('INVALID_OFFICE_LOGO', 'الصورة يجب أن تكون PNG أو JPG أو WEBP', 422)),
+  }).single('logo');
+  router.put(
+    '/offices/:id/logo',
+    owner,
+    (req, res, next) => logoUpload(req, res, (err?: unknown) => (err ? next(err) : next())),
+    asyncRoute(async (req, res) => {
+      if (!req.file) throw new AppError('VALIDATION_ERROR', 'اختر صورة اللوغو', 422);
+      const office = await deps.platform.setOfficeLogo(req.params.id, req.file);
+      await record(req, 'office.logo_updated', { officeId: office.id, target: office.name, size: req.file.size, type: req.file.mimetype });
+      res.json({ success: true, data: office });
+    }),
+  );
+  router.delete(
+    '/offices/:id/logo',
+    owner,
+    asyncRoute(async (req, res) => {
+      const office = await deps.platform.removeOfficeLogo(req.params.id);
+      await record(req, 'office.logo_removed', { officeId: office.id, target: office.name });
+      res.json({ success: true, data: office });
+    }),
+  );
+  // عرض اللوغو الحالي (يمرّ عبر اللوحة بتوكن المالك؛ v= للتخطي عن التخزين المؤقت)
+  router.get(
+    '/offices/:id/logo',
+    owner,
+    asyncRoute(async (req, res) => {
+      const office = await deps.platform.getOffice(req.params.id);
+      if (!office.logoPath) throw new AppError('NOT_FOUND', 'لا لوغو لهذا المكتب', 404);
+      const file = await deps.platform.fetchOfficeLogo(office.logoPath);
+      if (!file) throw new AppError('NOT_FOUND', 'ملف اللوغو غير موجود على خادم وفير', 404);
+      res.setHeader('content-type', file.contentType);
+      res.setHeader('cache-control', 'private, max-age=300');
+      res.send(Buffer.from(file.body));
     }),
   );
 

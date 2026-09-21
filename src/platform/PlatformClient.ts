@@ -21,6 +21,9 @@ export interface Office {
   phone: string | null;
   address: string | null;
   notes: string | null;
+  /** لوغو المكتب من اللوحة: مسار تحت uploads على خادم وفير أو null. */
+  logoPath: string | null;
+  logoUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
   stats?: OfficeStats | null;
@@ -73,12 +76,14 @@ export class PlatformClient {
   ) {}
 
   private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    // FormData (رفع ملف) يُرسل كما هو ليضع fetch حدود multipart بنفسه؛ غير ذلك JSON.
+    const multipart = typeof FormData !== 'undefined' && body instanceof FormData;
     let response: Response;
     try {
       response = await this.fetchImpl(`${this.baseUrl.replace(/\/+$/, '')}/platform${path}`, {
         method,
-        headers: { 'content-type': 'application/json', 'x-platform-key': this.apiKey },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        headers: multipart ? { 'x-platform-key': this.apiKey } : { 'content-type': 'application/json', 'x-platform-key': this.apiKey },
+        body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
       });
     } catch (error) {
       // «fetch failed» وحدها لا تفيد: نُظهر السبب الحقيقي (ECONNREFUSED/ENOTFOUND…) والهدف لتشخيص الشبكة.
@@ -131,6 +136,22 @@ export class PlatformClient {
   }
   regenerateCode(id: string): Promise<Office> {
     return this.call('POST', `/offices/${encodeURIComponent(id)}/code`);
+  }
+  /** لوغو المكتب (قرار المستخدم 2026-09-21): يُبدَّل من اللوحة متى شاء المالك. */
+  setOfficeLogo(id: string, file: { buffer: Buffer; mimetype: string; originalname: string }): Promise<Office> {
+    const form = new FormData();
+    form.append('logo', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }), file.originalname || 'logo');
+    return this.call('PUT', `/offices/${encodeURIComponent(id)}/logo`, form);
+  }
+  removeOfficeLogo(id: string): Promise<Office> {
+    return this.call('DELETE', `/offices/${encodeURIComponent(id)}/logo`);
+  }
+  /** يجلب ملف اللوغو من خادم وفير (خارج /api/v1) لعرضه في اللوحة دون كشف عنوان وفير للمتصفح. */
+  async fetchOfficeLogo(logoPath: string): Promise<{ body: ArrayBuffer; contentType: string } | null> {
+    const origin = new URL(this.baseUrl).origin;
+    const response = await this.fetchImpl(`${origin}/${logoPath.replace(/^\/+/, '')}`);
+    if (!response.ok) return null;
+    return { body: await response.arrayBuffer(), contentType: response.headers.get('content-type') ?? 'application/octet-stream' };
   }
   listAdmins(officeId: string): Promise<OfficeAdmin[]> {
     return this.call('GET', `/offices/${encodeURIComponent(officeId)}/admins`);

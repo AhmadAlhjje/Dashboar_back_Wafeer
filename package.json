@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "description": "لوحة تحكم وفير — الباك اند (Node + Express): مصادقة المالك، إدارة المكاتب عبر واجهة المنصّة، سجل العمليات",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "node dist/src/server.js",
@@ -14,6 +16,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@types/multer": "^2.2.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -21,6 +24,7 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.4.0",
     "mysql2": "^3.11.5",
     "pino": "^9.6.0",
     "zod": "^3.24.1"
