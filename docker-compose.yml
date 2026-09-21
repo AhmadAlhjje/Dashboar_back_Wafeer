@@ -5,6 +5,8 @@
 #   السجلات:          docker compose logs -f
 #   الإيقاف:          docker compose down        (البيانات تبقى في المجلد db_data)
 #   حذف كل شيء:       docker compose down -v     (يمسح قاعدة البيانات!)
+# الشبكة المشتركة wafeer-net تُنشأ مرة واحدة قبل أول تشغيل:  docker network create wafeer-net
+# (خادم وفير في wafeer/docker-compose.yml ينضم إليها ليستعمل القاعدة نفسها باسم wafeer-dashboard-db)
 services:
   db:
     image: mariadb:11
@@ -51,3 +53,8 @@ services:
 
 volumes:
   db_data:
+
+networks:
+  default:
+    name: wafeer-net
+    external: true
