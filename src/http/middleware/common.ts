@@ -1,3 +1,4 @@
+import { MulterError } from 'multer';
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { ZodError, type ZodTypeAny } from 'zod';
 import type pino from 'pino';
@@ -47,6 +48,16 @@ export const errorHandler =
       return void res.status(422).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid request', details: error.flatten() } });
     if (error instanceof AppError)
       return void res.status(error.status).json({ success: false, error: { code: error.code, message: error.message, details: error.details } });
+    // multer: ملف أكبر من الحدّ (لوغو المكتب) ⇒ 413 برسالة واضحة بدل 500
+    if (error instanceof MulterError)
+      return void res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 422).json({
+        success: false,
+        error: {
+          code: error.code === 'LIMIT_FILE_SIZE' ? 'FILE_TOO_LARGE' : 'INVALID_UPLOAD',
+          message: error.code === 'LIMIT_FILE_SIZE' ? 'حجم الصورة يتجاوز الحدّ المسموح (20MB)' : 'ملف الرفع غير صالح',
+          details: { code: error.code },
+        },
+      });
     logger.error({ path: req.path, errorMessage: error instanceof Error ? error.message : String(error) }, 'unhandled error');
     res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Internal server error', details: null } });
   };

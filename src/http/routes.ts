@@ -181,7 +181,7 @@ export function createRoutes(deps: RouteDeps): Router {
   // ── لوغو المكتب: يُبدَّل من اللوحة متى شاء المالك (داخل التطبيق يبقى مرة واحدة) ──
   const logoUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+    limits: { fileSize: 20 * 1024 * 1024, files: 1 },
     fileFilter: (_req, file, done) =>
       ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype)
         ? done(null, true)

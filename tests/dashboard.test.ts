@@ -192,6 +192,10 @@ describe('offices routes', () => {
     expect(bad.body.error.code).toBe('INVALID_OFFICE_LOGO');
     const missing = await request(app).put('/api/offices/5/logo').set('Authorization', `Bearer ${token}`);
     expect(missing.status).toBe(422);
+    // أكبر من 20MB ⇒ 413 برسالة واضحة (لا 500)
+    const huge = await request(app).put('/api/offices/5/logo').set('Authorization', `Bearer ${token}`).attach('logo', Buffer.alloc(20 * 1024 * 1024 + 1, 1), { filename: 'big.png', contentType: 'image/png' });
+    expect(huge.status).toBe(413);
+    expect(huge.body.error.code).toBe('FILE_TOO_LARGE');
     (platform.getOffice as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ...office, logoPath: 'uploads/offices/office-5-a.png' });
     const img = await request(app).get('/api/offices/5/logo').set('Authorization', `Bearer ${token}`);
     expect(img.status).toBe(200);
