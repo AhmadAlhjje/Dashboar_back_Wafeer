@@ -48,6 +48,23 @@ type Fetch = typeof fetch;
  * عميل واجهة وفير للمنصّة (`/platform/*` بمفتاح `X-Platform-Key`): مصدر الحقيقة الوحيد للمكاتب
  * وإداريّيها والإحصاءات؛ اللوحة لا تلمس جداول وفير مباشرة. الأخطاء تُعاد بشكلها الموحّد.
  */
+/** تلميح عربي بحسب كود خطأ الشبكة — يوجّه المشغّل إلى الإعداد الخاطئ مباشرة. */
+const hintFor = (code: string | null): string => {
+  switch (code) {
+    case 'ENOTFOUND':
+    case 'EAI_AGAIN':
+      return 'اسم المضيف في WAFEER_API_URL لا يُحلّ: تأكد أن حاوية وفير تعمل وأن الحاويتين على الشبكة wafeer-net نفسها';
+    case 'ECONNREFUSED':
+      return 'لا شيء يستمع على هذا العنوان/المنفذ: شغّل خادم وفير أو صحّح المنفذ في WAFEER_API_URL (127.0.0.1 داخل الحاوية يعني الحاوية نفسها)';
+    case 'ETIMEDOUT':
+    case 'ECONNRESET':
+    case 'EHOSTUNREACH':
+      return 'الاتصال يُحجب أو ينقطع: راجع الجدار الناري والشبكة بين الحاويتين';
+    default:
+      return 'تحقق من WAFEER_API_URL وأن خادم وفير يعمل (docker ps / docker compose logs)';
+  }
+};
+
 export class PlatformClient {
   constructor(
     private readonly baseUrl: string,
@@ -64,8 +81,15 @@ export class PlatformClient {
         body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch (error) {
+      // «fetch failed» وحدها لا تفيد: نُظهر السبب الحقيقي (ECONNREFUSED/ENOTFOUND…) والهدف لتشخيص الشبكة.
+      let cause = error instanceof Error && error.cause instanceof Error ? error.cause : null;
+      // Node يجرّب عدة عناوين (::1 ثم 127.0.0.1) ويجمعها في AggregateError — الكود في أول خطأ داخلي.
+      if (cause instanceof AggregateError && cause.errors[0] instanceof Error) cause = cause.errors[0];
+      const code = cause && 'code' in cause && typeof cause.code === 'string' ? cause.code : null;
       throw new AppError('WAFEER_UNREACHABLE', 'تعذّر الوصول إلى خادم وفير', 502, {
-        reason: error instanceof Error ? error.message : String(error),
+        reason: code ? `${code}: ${cause?.message ?? ''}`.trim() : error instanceof Error ? error.message : String(error),
+        target: this.baseUrl,
+        hint: hintFor(code),
       });
     }
     const text = await response.text();
