@@ -85,6 +85,7 @@ async function harness(ownerPassword = 'owner-pass-123') {
     removeOfficeLogo: vi.fn().mockResolvedValue(office),
     fetchOfficeLogo: vi.fn().mockResolvedValue({ body: new Uint8Array([137, 80, 78, 71]).buffer, contentType: 'image/png' }),
     listAdmins: vi.fn().mockResolvedValue([]),
+    resetMovements: vi.fn().mockResolvedValue({ ...office, movementsUsed: 0 }),
     listDevices: vi.fn().mockResolvedValue([{ id: '3', officeId: '5', label: 'أحمد — 2026-09-22 10:00', enrolledBy: '9', lastSeenAt: null, revokedAt: null, createdAt: '2026-09-22T10:00:00.000Z' }]),
     revokeDevice: vi.fn().mockResolvedValue({ id: '3', officeId: '5', label: 'أحمد — 2026-09-22 10:00', enrolledBy: '9', lastSeenAt: null, revokedAt: '2026-09-22T11:00:00.000Z', createdAt: '2026-09-22T10:00:00.000Z' }),
     createAdmin: vi.fn().mockResolvedValue({ id: '9', fullName: 'أحمد', role: 'ADMIN', isActive: true }),
@@ -222,6 +223,10 @@ describe('offices routes', () => {
     expect(unlimited.status).toBe(200);
     const bad = await request(app).put('/api/offices/5/license').set('Authorization', `Bearer ${token}`).send({ status: 'ACTIVE', movementLimit: -1 });
     expect(bad.status).toBe(422);
+    const reset = await request(app).post('/api/offices/5/movements/reset').set('Authorization', `Bearer ${token}`);
+    expect(reset.status).toBe(200);
+    expect(reset.body.data.movementsUsed).toBe(0);
+    expect(audit.entries.map((e) => e.action)).toContain('office.movements_reset');
     const devices = await request(app).get('/api/offices/5/devices').set('Authorization', `Bearer ${token}`);
     expect(devices.status).toBe(200);
     expect(devices.body.data).toHaveLength(1);

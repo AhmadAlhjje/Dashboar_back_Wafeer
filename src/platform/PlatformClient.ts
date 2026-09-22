@@ -165,6 +165,10 @@ export class PlatformClient {
     if (!response.ok) return null;
     return { body: await response.arrayBuffer(), contentType: response.headers.get('content-type') ?? 'application/octet-stream' };
   }
+  /** تصفير عدّاد الحركات المضافة (من اللوحة فقط). */
+  resetMovements(officeId: string): Promise<Office> {
+    return this.call('POST', `/offices/${encodeURIComponent(officeId)}/movements/reset`);
+  }
   listDevices(officeId: string): Promise<OfficeDevice[]> {
     return this.call('GET', `/offices/${encodeURIComponent(officeId)}/devices`);
   }

@@ -169,6 +169,17 @@ export function createRoutes(deps: RouteDeps): Router {
     }),
   );
 
+  // تصفير عدّاد الحركات (2026-09-22): من اللوحة فقط — التطبيق لا يستطيع ذلك أبداً.
+  router.post(
+    '/offices/:id/movements/reset',
+    owner,
+    asyncRoute(async (req, res) => {
+      const office = await deps.platform.resetMovements(req.params.id);
+      await record(req, 'office.movements_reset', { officeId: office.id, officeCode: office.code, target: office.name });
+      res.json({ success: true, data: office });
+    }),
+  );
+
   // أجهزة المكتب (2026-09-22): كل تفعيل بكود يسجّل جهازاً؛ الإلغاء يجبر الجهاز على كود جديد عند دخوله التالي.
   router.get(
     '/offices/:id/devices',
