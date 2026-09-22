@@ -54,6 +54,8 @@ export const createOfficeAdminSchema = z.object({
   role: z.enum(['ADMIN', 'MANAGER', 'ACCOUNTANT', 'EMPLOYEE', 'VIEWER']).optional(),
 });
 export const passwordSchema = z.object({ password: z.string().min(8).max(128) });
+/** حذف مكتب (2026-09-23): كود المكتب نفسه يُكتب في نافذة التأكيد. */
+export const deleteOfficeSchema = z.object({ confirm: z.string().trim().min(1).max(32) }).strict();
 /** إعلان المنصّة (2026-09-23): رسالة + تفعيل ⇒ تتوقف كل التطبيقات حتى يُلغيه المالك. */
 export const noticeSchema = z
   .object({ isActive: z.boolean(), title: nullableText(150), message: z.string().trim().max(2000) })
@@ -190,6 +192,23 @@ export function createRoutes(deps: RouteDeps): Router {
       const office = await deps.platform.setLicense(req.params.id, req.body);
       await record(req, `office.license.${req.body.status.toLowerCase()}`, { officeId: office.id, officeCode: office.code, target: office.name, details: req.body });
       res.json({ success: true, data: office });
+    }),
+  );
+
+  // حذف مكتب بكل بياناته (2026-09-23): لا رجعة فيه، ولذلك يُطلب كود المكتب في نافذة تأكيد.
+  router.delete(
+    '/offices/:id',
+    owner,
+    validate(deleteOfficeSchema),
+    asyncRoute(async (req, res) => {
+      const result = await deps.platform.deleteOffice(req.params.id, req.body.confirm);
+      await record(req, 'office.deleted', {
+        officeId: result.office.id,
+        officeCode: result.office.code,
+        target: result.office.name,
+        details: result.summary,
+      });
+      res.json({ success: true, data: result });
     }),
   );
 

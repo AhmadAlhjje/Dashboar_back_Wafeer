@@ -160,6 +160,10 @@ export class PlatformClient {
   setLicense(id: string, license: unknown): Promise<Office> {
     return this.call('PUT', `/offices/${encodeURIComponent(id)}/license`, license);
   }
+  /** حذف مكتب بكل بياناته — `confirm` هو كود المكتب نفسه (2026-09-23). */
+  deleteOffice(id: string, confirm: string): Promise<{ deleted: true; office: { id: string; code: string; name: string }; summary: Record<string, number> }> {
+    return this.call('DELETE', `/offices/${encodeURIComponent(id)}`, { confirm });
+  }
   regenerateCode(id: string): Promise<Office> {
     return this.call('POST', `/offices/${encodeURIComponent(id)}/code`);
   }

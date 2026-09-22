@@ -81,6 +81,11 @@ async function harness(ownerPassword = 'owner-pass-123') {
     updateOffice: vi.fn().mockResolvedValue(office),
     setLicense: vi.fn().mockResolvedValue({ ...office, status: 'SUSPENDED' }),
     regenerateCode: vi.fn().mockResolvedValue({ ...office, code: 'NEWC2DE9' }),
+    deleteOffice: vi.fn().mockResolvedValue({
+      deleted: true,
+      office: { id: '5', code: 'ABCD2345', name: 'مكتب حلب' },
+      summary: { movements: 20, clients: 9, admins: 3, devices: 1 },
+    }),
     setOfficeLogo: vi.fn().mockResolvedValue({ ...office, logoPath: 'uploads/offices/office-5-a.png', logoUpdatedAt: '2026-09-21T10:00:00.000Z' }),
     removeOfficeLogo: vi.fn().mockResolvedValue(office),
     fetchOfficeLogo: vi.fn().mockResolvedValue({ body: new Uint8Array([137, 80, 78, 71]).buffer, contentType: 'image/png' }),
@@ -312,5 +317,22 @@ describe('stop-all notice', () => {
     const read = await request(app).get('/api/notice').set('authorization', `Bearer ${token}`);
     expect(read.status).toBe(200);
     expect(read.body.data).toMatchObject({ isActive: false });
+  });
+});
+
+/** حذف مكتب (قرار المستخدم 2026-09-23): بتأكيد صريح من اللوحة، ويُدوَّن في السجل بملخّص ما حُذف. */
+describe('deleting an office', () => {
+  it('needs the owner token and the confirmation, then records the deletion', async () => {
+    const { app, token, platform, audit } = await harness();
+    expect((await request(app).delete('/api/offices/5').send({ confirm: 'ABCD2345' })).status).toBe(401);
+
+    const missing = await request(app).delete('/api/offices/5').set('authorization', `Bearer ${token}`).send({});
+    expect(missing.status).toBe(422);
+    expect(platform.deleteOffice).not.toHaveBeenCalled();
+
+    const ok = await request(app).delete('/api/offices/5').set('authorization', `Bearer ${token}`).send({ confirm: 'ABCD2345' });
+    expect(ok.status).toBe(200);
+    expect(platform.deleteOffice).toHaveBeenCalledWith('5', 'ABCD2345');
+    expect(audit.entries.at(-1)).toMatchObject({ action: 'office.deleted', officeCode: 'ABCD2345', target: 'مكتب حلب' });
   });
 });
