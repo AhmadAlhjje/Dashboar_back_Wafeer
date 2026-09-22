@@ -59,6 +59,8 @@ const office: Office = {
   phone: null,
   address: null,
   notes: null,
+  movementLimit: null,
+  movementsUsed: 0,
   logoPath: null,
   logoUpdatedAt: null,
   createdAt: '2026-09-20T00:00:00.000Z',
@@ -83,6 +85,8 @@ async function harness(ownerPassword = 'owner-pass-123') {
     removeOfficeLogo: vi.fn().mockResolvedValue(office),
     fetchOfficeLogo: vi.fn().mockResolvedValue({ body: new Uint8Array([137, 80, 78, 71]).buffer, contentType: 'image/png' }),
     listAdmins: vi.fn().mockResolvedValue([]),
+    listDevices: vi.fn().mockResolvedValue([{ id: '3', officeId: '5', label: 'أحمد — 2026-09-22 10:00', enrolledBy: '9', lastSeenAt: null, revokedAt: null, createdAt: '2026-09-22T10:00:00.000Z' }]),
+    revokeDevice: vi.fn().mockResolvedValue({ id: '3', officeId: '5', label: 'أحمد — 2026-09-22 10:00', enrolledBy: '9', lastSeenAt: null, revokedAt: '2026-09-22T11:00:00.000Z', createdAt: '2026-09-22T10:00:00.000Z' }),
     createAdmin: vi.fn().mockResolvedValue({ id: '9', fullName: 'أحمد', role: 'ADMIN', isActive: true }),
     resetAdminPassword: vi.fn().mockResolvedValue({ id: '9', fullName: 'أحمد' }),
     setAdminActive: vi.fn().mockResolvedValue({ id: '9', fullName: 'أحمد', isActive: false }),
@@ -207,6 +211,24 @@ describe('offices routes', () => {
     expect(audit.entries.map((e) => e.action)).toEqual(expect.arrayContaining(['office.logo_updated', 'office.logo_removed']));
     const anon = await request(app).put('/api/offices/5/logo').attach('logo', png, { filename: 'logo.png', contentType: 'image/png' });
     expect(anon.status).toBe(401);
+  });
+
+  it('sets a movement limit through the license endpoint and lists/revokes devices', async () => {
+    const { app, token, platform, audit } = await harness();
+    const lic = await request(app).put('/api/offices/5/license').set('Authorization', `Bearer ${token}`).send({ status: 'ACTIVE', movementLimit: 500 });
+    expect(lic.status).toBe(200);
+    expect(platform.setLicense).toHaveBeenCalledWith('5', expect.objectContaining({ status: 'ACTIVE', movementLimit: 500 }));
+    const unlimited = await request(app).put('/api/offices/5/license').set('Authorization', `Bearer ${token}`).send({ status: 'ACTIVE', movementLimit: null });
+    expect(unlimited.status).toBe(200);
+    const bad = await request(app).put('/api/offices/5/license').set('Authorization', `Bearer ${token}`).send({ status: 'ACTIVE', movementLimit: -1 });
+    expect(bad.status).toBe(422);
+    const devices = await request(app).get('/api/offices/5/devices').set('Authorization', `Bearer ${token}`);
+    expect(devices.status).toBe(200);
+    expect(devices.body.data).toHaveLength(1);
+    const revoked = await request(app).delete('/api/offices/5/devices/3').set('Authorization', `Bearer ${token}`);
+    expect(revoked.status).toBe(200);
+    expect(revoked.body.data.revokedAt).toBeTruthy();
+    expect(audit.entries.map((e) => e.action)).toContain('office.device_revoked');
   });
 
   it('manages office admins and platform owners', async () => {

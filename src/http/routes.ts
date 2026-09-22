@@ -43,6 +43,8 @@ export const licenseSchema = z.object({
   status: z.enum(['ACTIVE', 'SUSPENDED', 'EXPIRED']),
   expiresAt: dateOrNull,
   message: nullableText(500),
+  /** حد الحركات (إضافات فقط): null = بلا حد، غير موجود = لا تغيير. */
+  movementLimit: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
 });
 export const createOfficeAdminSchema = z.object({
   fullName: z.string().trim().min(2).max(150),
@@ -164,6 +166,24 @@ export function createRoutes(deps: RouteDeps): Router {
       const office = await deps.platform.setLicense(req.params.id, req.body);
       await record(req, `office.license.${req.body.status.toLowerCase()}`, { officeId: office.id, officeCode: office.code, target: office.name, details: req.body });
       res.json({ success: true, data: office });
+    }),
+  );
+
+  // أجهزة المكتب (2026-09-22): كل تفعيل بكود يسجّل جهازاً؛ الإلغاء يجبر الجهاز على كود جديد عند دخوله التالي.
+  router.get(
+    '/offices/:id/devices',
+    owner,
+    asyncRoute(async (req, res) => {
+      res.json({ success: true, data: await deps.platform.listDevices(req.params.id) });
+    }),
+  );
+  router.delete(
+    '/offices/:id/devices/:deviceId',
+    owner,
+    asyncRoute(async (req, res) => {
+      const device = await deps.platform.revokeDevice(req.params.id, req.params.deviceId);
+      await record(req, 'office.device_revoked', { officeId: req.params.id, target: device.label ?? device.id });
+      res.json({ success: true, data: device });
     }),
   );
 

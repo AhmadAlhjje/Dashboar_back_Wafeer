@@ -21,6 +21,9 @@ export interface Office {
   phone: string | null;
   address: string | null;
   notes: string | null;
+  /** حد الحركات (إضافات فقط؛ null = بلا حد) والعدّاد. */
+  movementLimit: number | null;
+  movementsUsed: number;
   /** لوغو المكتب من اللوحة: مسار تحت uploads على خادم وفير أو null. */
   logoPath: string | null;
   logoUpdatedAt: string | null;
@@ -28,6 +31,15 @@ export interface Office {
   updatedAt: string;
   stats?: OfficeStats | null;
   license?: { status: LicenseStatus; expiresAt: string | null; message: string | null; checkedAt: string };
+}
+export interface OfficeDevice {
+  id: string;
+  officeId: string;
+  label: string | null;
+  enrolledBy: string | null;
+  lastSeenAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
 }
 export interface OfficeAdmin {
   id: string;
@@ -152,6 +164,12 @@ export class PlatformClient {
     const response = await this.fetchImpl(`${origin}/${logoPath.replace(/^\/+/, '')}`);
     if (!response.ok) return null;
     return { body: await response.arrayBuffer(), contentType: response.headers.get('content-type') ?? 'application/octet-stream' };
+  }
+  listDevices(officeId: string): Promise<OfficeDevice[]> {
+    return this.call('GET', `/offices/${encodeURIComponent(officeId)}/devices`);
+  }
+  revokeDevice(officeId: string, deviceId: string): Promise<OfficeDevice> {
+    return this.call('DELETE', `/offices/${encodeURIComponent(officeId)}/devices/${encodeURIComponent(deviceId)}`);
   }
   listAdmins(officeId: string): Promise<OfficeAdmin[]> {
     return this.call('GET', `/offices/${encodeURIComponent(officeId)}/admins`);
