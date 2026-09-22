@@ -50,6 +50,13 @@ export interface OfficeAdmin {
   permissions: string[] | null;
   isActive: boolean;
 }
+/** إعلان المنصّة: رسالة المالك التي تُوقف كل التطبيقات عند تفعيلها (2026-09-23). */
+export interface PlatformNotice {
+  isActive: boolean;
+  title: string | null;
+  message: string;
+  updatedAt: string | null;
+}
 export interface PlatformOverview {
   offices: { total: number; active: number; suspended: number; expired: number };
   movements: { total: number; today: number };
@@ -130,6 +137,13 @@ export class PlatformClient {
 
   overview(): Promise<PlatformOverview> {
     return this.call('GET', '/overview');
+  }
+  /** إعلان المنصّة: يُقرأ ويُكتب من اللوحة؛ تفعيله يوقف كل التطبيقات عند إقلاعها/دخولها التالي. */
+  getNotice(): Promise<PlatformNotice> {
+    return this.call('GET', '/notice');
+  }
+  setNotice(input: { isActive: boolean; title?: string | null; message: string }): Promise<PlatformNotice> {
+    return this.call('PUT', '/notice', input);
   }
   listOffices(): Promise<Office[]> {
     return this.call('GET', '/offices');

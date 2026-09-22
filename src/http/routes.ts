@@ -54,6 +54,11 @@ export const createOfficeAdminSchema = z.object({
   role: z.enum(['ADMIN', 'MANAGER', 'ACCOUNTANT', 'EMPLOYEE', 'VIEWER']).optional(),
 });
 export const passwordSchema = z.object({ password: z.string().min(8).max(128) });
+/** إعلان المنصّة (2026-09-23): رسالة + تفعيل ⇒ تتوقف كل التطبيقات حتى يُلغيه المالك. */
+export const noticeSchema = z
+  .object({ isActive: z.boolean(), title: nullableText(150), message: z.string().trim().max(2000) })
+  .strict()
+  .refine((v) => !v.isActive || v.message.length > 0, { message: 'لا يمكن تفعيل إعلان بلا رسالة', path: ['message'] });
 
 export interface RouteDeps {
   auth: AuthService;
@@ -114,6 +119,25 @@ export function createRoutes(deps: RouteDeps): Router {
     asyncRoute(async (_req, res) => {
       const [overview, recent] = await Promise.all([deps.platform.overview(), deps.audit.recent(10)]);
       res.json({ success: true, data: { ...overview, recentAudit: recent } });
+    }),
+  );
+
+  // ── إعلان المنصّة (يوقف كل التطبيقات) ─────────────────────────────────
+  router.get(
+    '/notice',
+    owner,
+    asyncRoute(async (_req, res) => {
+      res.json({ success: true, data: await deps.platform.getNotice() });
+    }),
+  );
+  router.put(
+    '/notice',
+    owner,
+    validate(noticeSchema),
+    asyncRoute(async (req, res) => {
+      const notice = await deps.platform.setNotice(req.body);
+      await record(req, notice.isActive ? 'notice.activated' : 'notice.cancelled', { details: { message: notice.message } });
+      res.json({ success: true, data: notice });
     }),
   );
 

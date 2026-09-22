@@ -92,6 +92,8 @@ async function harness(ownerPassword = 'owner-pass-123') {
     resetAdminPassword: vi.fn().mockResolvedValue({ id: '9', fullName: 'أحمد' }),
     setAdminActive: vi.fn().mockResolvedValue({ id: '9', fullName: 'أحمد', isActive: false }),
     reachable: vi.fn().mockResolvedValue(true),
+    getNotice: vi.fn().mockResolvedValue({ isActive: false, title: null, message: '', updatedAt: null }),
+    setNotice: vi.fn(async (input: { isActive: boolean; title?: string | null; message: string }) => ({ ...input, title: input.title ?? null, updatedAt: '2026-09-23T10:00:00.000Z' })),
   } as unknown as PlatformClient;
   const app = createApp({ auth, owners, audit, platform }, { corsOrigins: ['http://localhost:5173'], logger: pino({ level: 'silent' }) });
   const login = await request(app).post('/api/auth/login').send({ username: 'owner', password: ownerPassword });
@@ -282,5 +284,33 @@ describe('PlatformClient', () => {
     const down = new PlatformClient('http://api/api/v1', 'k'.repeat(32), vi.fn(async () => { throw new Error('ECONNREFUSED'); }) as unknown as typeof fetch);
     await expect(down.overview()).rejects.toMatchObject({ code: 'WAFEER_UNREACHABLE', status: 502 });
     expect(await down.reachable()).toBe(false);
+  });
+});
+
+/** إعلان إيقاف كل التطبيقات (قرار المستخدم 2026-09-23): من اللوحة وحدها، ويُدوَّن في السجل. */
+describe('stop-all notice', () => {
+  it('needs the owner token, refuses activating without a message, and records the action', async () => {
+    const { app, token, platform, audit } = await harness();
+    expect((await request(app).put('/api/notice').send({ isActive: true, message: 'x' })).status).toBe(401);
+
+    const empty = await request(app).put('/api/notice').set('authorization', `Bearer ${token}`).send({ isActive: true, message: '   ' });
+    expect(empty.status).toBe(422);
+    expect(platform.setNotice).not.toHaveBeenCalled();
+
+    const on = await request(app)
+      .put('/api/notice')
+      .set('authorization', `Bearer ${token}`)
+      .send({ isActive: true, title: 'صيانة', message: 'التطبيق متوقف مؤقتاً' });
+    expect(on.status).toBe(200);
+    expect(on.body.data).toMatchObject({ isActive: true, message: 'التطبيق متوقف مؤقتاً' });
+    expect(audit.entries.at(-1)?.action).toBe('notice.activated');
+
+    const off = await request(app).put('/api/notice').set('authorization', `Bearer ${token}`).send({ isActive: false, message: 'التطبيق متوقف مؤقتاً' });
+    expect(off.status).toBe(200);
+    expect(audit.entries.at(-1)?.action).toBe('notice.cancelled');
+
+    const read = await request(app).get('/api/notice').set('authorization', `Bearer ${token}`);
+    expect(read.status).toBe(200);
+    expect(read.body.data).toMatchObject({ isActive: false });
   });
 });
